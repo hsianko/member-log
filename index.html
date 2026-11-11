@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>組員出勤與操作紀錄</title>
+<style>
+:root{--bg:#fffaf0;--card:#fff;--ink:#3b3634;--sub:#7a716b;--line:#e5d9c6;--input:#faf1df;--accent:#cde5bf;--accent2:#f6d27a;--bad:#e8867a;--warn:#f1c25b;--ok:#86b97a;--shadow:#3b3634}
+@media (prefers-color-scheme:dark){:root{--bg:#1f1d1b;--card:#2a2725;--ink:#f1e9de;--sub:#b3a99d;--line:#4a4440;--input:#363230;--accent:#8fa584;--accent2:#c9a24f;--bad:#d77a6e;--warn:#cfa44a;--ok:#7ea373;--shadow:#000}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'PingFang TC','Microsoft JhengHei',sans-serif;font-size:15px}
+.wrap{max-width:900px;margin:0 auto;padding:14px 16px 60px}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+h1{font-size:21px;margin:0}
+button,select,input{font:inherit;color:var(--ink)}
+.btn{border:2px solid var(--ink);background:var(--card);border-radius:12px;padding:7px 14px;cursor:pointer;box-shadow:2px 2px 0 var(--shadow);font-weight:600}
+.btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--shadow)}
+.btn.primary{background:var(--accent)}
+.btn.small{padding:3px 10px;font-size:13px;box-shadow:none;border-width:1.5px}
+.btn:disabled{opacity:.55;cursor:default}
+.tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.tabs .btn.on{background:var(--accent2)}
+.card{background:var(--card);border:2.5px solid var(--ink);border-radius:18px;box-shadow:4px 4px 0 var(--shadow);padding:16px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.field label{display:block;font-size:13px;color:var(--sub);margin-bottom:3px}
+.field.full{grid-column:1/-1}
+select,input[type=text],input[type=password]{width:100%;background:var(--input);border:1.5px solid var(--line);border-radius:12px;padding:9px 12px}
+.ymd{display:flex;gap:6px}
+.msg{margin-top:10px;font-size:14px;color:var(--sub);min-height:20px}
+.msg.err{color:var(--bad);font-weight:600}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.toolbar select{width:auto}
+.tablewrap{overflow-x:auto;border:1.5px solid var(--line);border-radius:12px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:560px}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap;font-size:14px}
+th{background:var(--input);font-size:13px;color:var(--sub)}
+td.note{white-space:normal;min-width:100px}
+td.num,th.num{text-align:center}
+.tag{display:inline-block;padding:1px 9px;border-radius:999px;border:1.5px solid var(--ink);font-size:12.5px;font-weight:600;color:#3b3634}
+.t-ok{background:#cde5bf}.t-warn{background:#f6d27a}.t-bad{background:#f2a89d}.t-info{background:#bcd6ee}
+.empty{padding:20px;text-align:center;color:var(--sub)}
+.hide{display:none!important}
+.setup p{color:var(--sub);margin:0 0 12px;line-height:1.6}
+.hint{color:var(--sub);font-size:13px;margin:8px 0 0}
+@media (max-width:560px){.c-shift{display:none}table{min-width:420px}.grid{grid-template-columns:1fr}h1{font-size:19px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>組員出勤與操作紀錄</h1>
+    <button class="btn small" id="btn-setup">設定</button>
+  </header>
+
+  <div id="setup" class="card setup hide">
+    <p>第一次使用請貼上 Apps Script 的網址與你設定的密碼，這些只會存在這台裝置的瀏覽器裡。</p>
+    <div class="field"><label>Apps Script 網址</label><input type="text" id="api-url" placeholder="https://script.google.com/macros/s/.../exec"></div>
+    <div class="field" style="margin-top:10px"><label>密碼</label><input type="password" id="api-pw"></div>
+    <div style="margin-top:12px"><button class="btn primary" id="btn-save-setup">儲存並連線</button></div>
+    <div class="msg" id="setup-msg"></div>
+  </div>
+
+  <div id="main" class="hide">
+    <div class="tabs">
+      <button class="btn on" data-tab="add">新增紀錄</button>
+      <button class="btn" data-tab="list">紀錄清單</button>
+      <button class="btn" data-tab="stat">月統計</button>
+    </div>
+
+    <section id="tab-add" class="card">
+      <div class="grid">
+        <div class="field full"><label>日期</label>
+          <div class="ymd"><select id="f-y"></select><select id="f-m"></select><select id="f-d"></select></div></div>
+        <div class="field"><label>組員</label><select id="f-member"></select></div>
+        <div class="field"><label>班別</label><select id="f-shift"></select></div>
+        <div class="field"><label>出勤狀況</label><select id="f-att"></select></div>
+        <div class="field"><label>操作機台</label><select id="f-machine"></select></div>
+        <div class="field"><label>操作狀況</label><select id="f-ops"></select></div>
+        <div class="field"><label>備註（可不填）</label><input type="text" id="f-note" placeholder="例如：遲到 10 分鐘、處理取標異常很熟練"></div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn primary" id="btn-submit">新增紀錄</button>
+        <button class="btn hide" id="btn-cancel-edit">取消修改</button>
+      </div>
+      <div class="msg" id="add-msg"></div>
+    </section>
+
+    <section id="tab-list" class="hide">
+      <div class="toolbar">
+        <select id="l-member"></select>
+        <select id="l-month"></select>
+        <button class="btn small" id="btn-csv">匯出 CSV</button>
+        <span id="l-count" class="hint" style="margin:0"></span>
+      </div>
+      <div class="tablewrap" id="l-table"></div>
+    </section>
+
+    <section id="tab-stat" class="hide">
+      <div class="toolbar"><select id="s-month"></select><span class="hint" style="margin:0">統計的是每位組員當月各項狀況的「次數」</span></div>
+      <div class="tablewrap" id="s-table"></div>
+    </section>
+  </div>
+</div>
+
+<script>
+// ===== 選項設定：之後要增減組員或選項，改這裡即可 =====
+const MEMBERS = ['嘉君','冠裕','于婷','浩哲','楷蓉','語萱'];
+const SHIFTS = ['08:30-17:30','09:00-18:00'];
+const ATTENDANCE = ['正常出勤','遲到','早退','請假','曠職','加班'];
+const MACHINES = ['無','大寶','二寶','三寶','四寶'];
+const OPS = ['良好','正常','需要提醒','操作失誤','需要協助'];
+const ATT_TAG = {'正常出勤':'ok','加班':'info','遲到':'warn','早退':'warn','請假':'info','曠職':'bad'};
+const OPS_TAG = {'良好':'ok','正常':'ok','需要提醒':'warn','操作失誤':'bad','需要協助':'warn'};
+// ===================================================
+
+const $ = id => document.getElementById(id);
+const LS = {get:k=>{try{return localStorage.getItem(k)||''}catch(e){return ''}}, set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
+let API = LS.get('crew-api'), PW = LS.get('crew-pw');
+let rows = [], editingRow = null, busy = false, delArm = null;
+const pad = n => String(n).padStart(2,'0');
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const opts = (arr, first) => (first?`<option value="">${first}</option>`:'') + arr.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+
+async function call(payload){
+  const res = await fetch(API, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(Object.assign({pw:PW}, payload))});
+  const json = await res.json();
+  if(!json.ok) throw new Error(json.error || '發生錯誤');
+  return json;
+}
+
+function initForm(){
+  const now = new Date(), y = now.getFullYear();
+  $('f-y').innerHTML = opts([y-1,y,y+1].map(v=>v+'')).replace(/>(\d+)</g,'>$1年<');
+  $('f-m').innerHTML = opts(Array.from({length:12},(_,i)=>i+1+'')).replace(/>(\d+)</g,'>$1月<');
+  $('f-d').innerHTML = opts(Array.from({length:31},(_,i)=>i+1+'')).replace(/>(\d+)</g,'>$1日<');
+  $('f-member').innerHTML = opts(MEMBERS,'請選擇');
+  $('f-shift').innerHTML = opts(SHIFTS);
+  $('f-att').innerHTML = opts(ATTENDANCE);
+  $('f-machine').innerHTML = opts(MACHINES);
+  $('f-ops').innerHTML = opts(OPS);
+  $('l-member').innerHTML = opts(MEMBERS,'全部組員');
+  resetForm();
+}
+function setDate(ymd){
+  const [y,m,d] = ymd.split('-').map(Number);
+  if(![...$('f-y').options].some(o=>o.value===String(y))) $('f-y').insertAdjacentHTML('beforeend',`<option value="${y}">${y}年</option>`);
+  $('f-y').value = String(y); $('f-m').value = String(m); $('f-d').value = String(d);
+}
+function resetForm(){
+  const n = new Date();
+  setDate(`${n.getFullYear()}-${pad(n.getMonth()+1)}-${pad(n.getDate())}`);
+  $('f-member').value = ''; $('f-att').value = ATTENDANCE[0]; $('f-machine').value = MACHINES[0]; $('f-ops').value = OPS[1]; $('f-note').value = '';
+  editingRow = null;
+  $('btn-submit').textContent = '新增紀錄'; $('btn-cancel-edit').classList.add('hide');
+}
+function formDate(){ return `${$('f-y').value}-${pad($('f-m').value)}-${pad($('f-d').value)}`; }
+function validDate(s){ const [y,m,d]=s.split('-').map(Number); const t=new Date(y,m-1,d); return t.getFullYear()===y&&t.getMonth()===m-1&&t.getDate()===d; }
+function setMsg(id,t,err){ const e=$(id); e.textContent=t; e.className='msg'+(err?' err':''); }
+
+async function submit(){
+  if(busy) return;
+  const date = formDate();
+  if(!validDate(date)){ setMsg('add-msg','日期不正確，請重新選擇。',1); return; }
+  if(!$('f-member').value){ setMsg('add-msg','請先選擇組員。',1); return; }
+  const data = {'日期':date,'組員':$('f-member').value,'班別':$('f-shift').value,'出勤狀況':$('f-att').value,'機台':$('f-machine').value,'操作狀況':$('f-ops').value,'備註':$('f-note').value.trim()};
+  busy = true; $('btn-submit').disabled = true; const old = $('btn-submit').textContent; $('btn-submit').textContent = '儲存中…'; setMsg('add-msg','');
+  try{
+    const r = editingRow ? await call({action:'update',row:editingRow,data}) : await call({action:'add',data});
+    rows = r.rows;
+    setMsg('add-msg', (editingRow?'已修改 ':'已新增 ') + `${date}・${data['組員']}`);
+    resetForm();
+    refreshViews();
+  }catch(e){ setMsg('add-msg','儲存失敗：'+e.message+'（資料沒有存入，請再試一次）',1); $('btn-submit').textContent = old; }
+  busy = false; $('btn-submit').disabled = false;
+}
+
+function tag(map, v){ return v ? `<span class="tag t-${map[v]||'info'}">${esc(v)}</span>` : ''; }
+function months(){ return [...new Set(rows.map(r=>r['日期'].slice(0,7)))].sort().reverse(); }
+
+function refreshViews(){
+  const ms = months();
+  const cur = $('l-month').value, curS = $('s-month').value;
+  const thisM = (()=>{const n=new Date();return `${n.getFullYear()}-${pad(n.getMonth()+1)}`})();
+  const all = ms.includes(thisM) ? ms : [thisM].concat(ms);
+  $('l-month').innerHTML = `<option value="">全部月份</option>` + all.map(m=>`<option value="${m}">${m.replace('-','年')}月</option>`).join('');
+  $('s-month').innerHTML = all.map(m=>`<option value="${m}">${m.replace('-','年')}月</option>`).join('');
+  $('l-month').value = all.includes(cur) ? cur : '';
+  $('s-month').value = all.includes(curS) ? curS : thisM;
+  renderList(); renderStat();
+}
+
+function filtered(){
+  const m = $('l-member').value, mo = $('l-month').value;
+  return rows.filter(r => (!m || r['組員']===m) && (!mo || r['日期'].startsWith(mo)))
+    .sort((a,b)=> b['日期'].localeCompare(a['日期']) || b._row - a._row);
+}
+function renderList(){
+  const list = filtered();
+  $('l-count').textContent = `共 ${list.length} 筆`;
+  if(!list.length){ $('l-table').innerHTML = '<div class="empty">目前沒有符合的紀錄。</div>'; return; }
+  $('l-table').innerHTML = `<table><thead><tr><th>日期</th><th>組員</th><th class="c-shift">班別</th><th>出勤</th><th>機台</th><th>操作</th><th>備註</th><th></th></tr></thead><tbody>` +
+  list.map(r=>`<tr><td>${esc(r['日期'].slice(5).replace('-','/'))}</td><td><b>${esc(r['組員'])}</b></td><td class="c-shift">${esc(r['班別'])}</td><td>${tag(ATT_TAG,r['出勤狀況'])}</td><td>${esc(r['機台'])}</td><td>${tag(OPS_TAG,r['操作狀況'])}</td><td class="note">${esc(r['備註'])}</td>
+  <td><button class="btn small" data-edit="${r._row}">修改</button> <button class="btn small" data-del="${r._row}">${delArm===r._row?'確定刪除？':'刪除'}</button></td></tr>`).join('') + '</tbody></table>';
+}
+function renderStat(){
+  const mo = $('s-month').value;
+  const list = rows.filter(r=>r['日期'].startsWith(mo));
+  const cols = [['正常出勤',0],['遲到',0],['早退',0],['請假',0],['曠職',0],['加班',0]];
+  const ops = ['良好','需要提醒','操作失誤','需要協助'];
+  const names = [...new Set(MEMBERS.concat(list.map(r=>r['組員'])))];
+  const body = names.map(n=>{
+    const mine = list.filter(r=>r['組員']===n);
+    const c = k => mine.filter(r=>r['出勤狀況']===k).length;
+    const o = k => mine.filter(r=>r['操作狀況']===k).length;
+    const cell = v => `<td class="num">${v||'－'}</td>`;
+    return `<tr><td><b>${esc(n)}</b></td><td class="num">${mine.length}</td>${cols.map(([k])=>cell(c(k))).join('')}${ops.map(k=>cell(o(k))).join('')}</tr>`;
+  }).join('');
+  $('s-table').innerHTML = `<table style="min-width:720px"><thead><tr><th>組員</th><th class="num">紀錄天數</th>${cols.map(([k])=>`<th class="num">${k}</th>`).join('')}${ops.map(k=>`<th class="num">${k}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+function startEdit(row){
+  const r = rows.find(x=>x._row===row); if(!r) return;
+  editingRow = row; setDate(r['日期']);
+  $('f-member').value = r['組員']; $('f-shift').value = r['班別']; $('f-att').value = r['出勤狀況']; $('f-machine').value = r['機台']; $('f-ops').value = r['操作狀況']; $('f-note').value = r['備註'];
+  $('btn-submit').textContent = '儲存修改'; $('btn-cancel-edit').classList.remove('hide');
+  setMsg('add-msg','正在修改一筆紀錄，改完請按「儲存修改」。');
+  showTab('add'); window.scrollTo({top:0,behavior:'smooth'});
+}
+async function del(row){
+  if(delArm !== row){ delArm = row; renderList(); setTimeout(()=>{ if(delArm===row){ delArm=null; renderList(); } },4000); return; }
+  delArm = null;
+  try{ const r = await call({action:'delete',row}); rows = r.rows; refreshViews(); }
+  catch(e){ alert('刪除失敗：'+e.message); renderList(); }
+}
+
+function exportCsv(){
+  const list = filtered();
+  if(!list.length){ alert('目前沒有可以匯出的紀錄。'); return; }
+  const H = ['日期','組員','班別','出勤狀況','機台','操作狀況','備註'];
+  const q = v => '"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+  const csv = '﻿' + [H.map(q).join(',')].concat(list.map(r=>H.map(h=>q(r[h])).join(','))).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  const n = new Date(); a.download = `組員紀錄_${n.getFullYear()}${pad(n.getMonth()+1)}${pad(n.getDate())}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+function showTab(t){
+  ['add','list','stat'].forEach(k=>{ $('tab-'+k).classList.toggle('hide',k!==t); });
+  document.querySelectorAll('.tabs .btn').forEach(b=>b.classList.toggle('on',b.dataset.tab===t));
+}
+
+async function connect(){
+  $('setup').classList.add('hide'); $('main').classList.remove('hide');
+  $('l-count').textContent = '讀取中…';
+  try{ const r = await call({action:'load'}); rows = r.rows; refreshViews(); setMsg('add-msg',''); }
+  catch(e){ $('main').classList.add('hide'); $('setup').classList.remove('hide'); setMsg('setup-msg','連線失敗：'+e.message+'。請確認網址與密碼。',1); }
+}
+
+$('btn-setup').onclick = ()=>{ $('api-url').value = API; $('api-pw').value = PW; $('setup').classList.toggle('hide'); };
+$('btn-save-setup').onclick = ()=>{
+  const u = $('api-url').value.trim(), p = $('api-pw').value;
+  if(!u || !p){ setMsg('setup-msg','網址與密碼都要填。',1); return; }
+  API = u; PW = p; LS.set('crew-api',u); LS.set('crew-pw',p); setMsg('setup-msg','連線中…'); connect();
+};
+document.querySelectorAll('.tabs .btn').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+$('btn-submit').onclick = submit;
+$('btn-cancel-edit').onclick = ()=>{ resetForm(); setMsg('add-msg',''); };
+$('l-member').onchange = $('l-month').onchange = renderList;
+$('s-month').onchange = renderStat;
+$('btn-csv').onclick = exportCsv;
+$('l-table').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  if(b.dataset.edit) startEdit(+b.dataset.edit); else if(b.dataset.del) del(+b.dataset.del);
+});
+
+initForm();
+if(API && PW) connect(); else { $('setup').classList.remove('hide'); }
+</script>
+</body>
+</html>
