@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
 <title>組員出勤與操作紀錄</title>
 <style>
 :root{--bg:#fffaf0;--card:#fff;--ink:#3b3634;--sub:#7a716b;--line:#e5d9c6;--input:#faf1df;--accent:#cde5bf;--accent2:#f6d27a;--bad:#e8867a;--warn:#f1c25b;--ok:#86b97a;--shadow:#3b3634}
@@ -20,6 +22,9 @@ h1{font-size:21px;margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wra
 .theme{display:flex;align-items:center;gap:2px;border:2px solid var(--ink);border-radius:999px;background:var(--card);padding:2px;cursor:pointer}
 .theme span{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;line-height:1}
 .theme span.on{background:var(--accent2)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+.modal .card{width:100%;max-width:420px;max-height:80vh;overflow:auto}
+.mhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
 .log-item{padding:10px 0;border-bottom:1px dashed var(--line)}
 .log-item:last-child{border-bottom:0}
 .log-item b{font-size:15px}
@@ -68,14 +73,20 @@ td.num,th.num{text-align:center}
     </div>
   </header>
 
-  <div id="verlog" class="card hide" style="margin-bottom:14px"></div>
+  <div id="vermodal" class="modal hide" role="dialog" aria-modal="true" aria-label="版本記錄">
+    <div class="card">
+      <div class="mhead"><b style="font-size:16px">版本記錄</b><span><button class="btn small" id="btn-reload" type="button">重新載入最新版</button> <button class="btn small" id="btn-ver-close" type="button">關閉</button></span></div>
+      <div id="verlog"></div>
+    </div>
+  </div>
 
   <div id="setup" class="card setup hide">
-    <p>第一次使用請貼上 Apps Script 的網址與你設定的密碼，這些只會存在這台裝置的瀏覽器裡。</p>
+    <p>第一次使用請貼上 Apps Script 的網址與你設定的密碼，這些會存在這台裝置的瀏覽器，也會記在網址列（#cfg），請勿分享含此設定的網址。</p>
     <div class="field"><label>Apps Script 網址</label><input type="text" id="api-url" placeholder="https://script.google.com/macros/s/.../exec"></div>
     <div class="field" style="margin-top:10px"><label>密碼</label><input type="password" id="api-pw"></div>
     <div style="margin-top:12px"><button class="btn primary" id="btn-save-setup">儲存並連線</button></div>
     <div class="msg" id="setup-msg"></div>
+    <p class="hint">連線成功後，網址列會自動帶入設定。請在這個狀態下「加入書籤」或「加入主畫面」，之後從該入口開啟就不用再輸入。</p>
   </div>
 
   <div id="main" class="hide">
@@ -107,6 +118,7 @@ td.num,th.num{text-align:center}
       <div class="toolbar">
         <select id="l-member"></select>
         <select id="l-month"></select>
+        <select id="l-type"></select>
         <button class="btn small" id="btn-csv">匯出 CSV</button>
         <span id="l-count" class="hint" style="margin:0"></span>
       </div>
@@ -128,17 +140,43 @@ const ATTENDANCE = ['正常出勤','遲到','早退','請假','曠職','加班']
 const MACHINES = ['無','大寶','二寶','三寶','四寶'];
 const OPS = ['良好','正常','需要提醒','操作失誤','需要協助'];
 const ATT_TAG = {'正常出勤':'ok','加班':'info','遲到':'warn','早退':'warn','請假':'info','曠職':'bad'};
+const ATT_ABNORMAL = ['請假','遲到','早退','曠職'];
+const ISSUE_OPS = ['需要提醒','操作失誤','需要協助'];
 const OPS_TAG = {'良好':'ok','正常':'ok','需要提醒':'warn','操作失誤':'bad','需要協助':'warn'};
 // ===================================================
 
-const VERSION = 'v1.1';
+const VERSION = 'v1.3';
 const CHANGELOG = [
+  {v:'v1.3', d:'2026-11-12', items:['紀錄清單「請假」篩選改為「出勤異常」，包含請假、遲到、早退、曠職']},
+  {v:'v1.2', d:'2026-11-12', items:['紀錄清單新增「類型」篩選：請假／作業問題','連線設定自動記在網址列，加入書籤或主畫面後免重複輸入','開啟時自動檢查新版，不用再重新加入主畫面','版本記錄改為浮動視窗，內含「重新載入最新版」按鈕']},
   {v:'v1.1', d:'2026-11-11', items:['新增深淺色切換按鈕（記住你的選擇，預設跟隨裝置）','修正手機點選欄位時頁面自動放大、捲動造成頂端畫面位移','加入版本記錄']},
   {v:'v1.0', d:'2026-11-11', items:['初版：新增、修改、刪除紀錄','紀錄清單（可依組員、月份篩選，匯出 CSV）','月統計']}
 ];
 const $ = id => document.getElementById(id);
 const LS = {get:k=>{try{return localStorage.getItem(k)||''}catch(e){return ''}}, set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
 let API = LS.get('crew-api'), PW = LS.get('crew-pw');
+// 連線設定同時存在「瀏覽器儲存」與「網址列 #cfg」：iPhone Safari 會清掉儲存，但書籤／主畫面的網址仍帶著設定
+function cfgFromHash(){
+  try{ const m = location.hash.match(/[#&]cfg=([^&]+)/); if(!m) return null;
+    return JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1]))))); }catch(e){ return null; }
+}
+function cfgToHash(){ return '#cfg=' + encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify({u:API,p:PW}))))); }
+function syncHash(){ try{ if(API && PW) history.replaceState(null,'',location.pathname+location.search+cfgToHash()); }catch(e){} }
+(function(){ const c = cfgFromHash(); if(c && c.u && c.p){ API = c.u; PW = c.p; LS.set('crew-api',API); LS.set('crew-pw',PW); } })();
+try{ navigator.storage && navigator.storage.persist && navigator.storage.persist(); }catch(e){}
+function formDirty(){ return !!(editingRow || ($('f-member') && $('f-member').value) || ($('f-note') && $('f-note').value)); }
+function reloadLatest(v){ const u = new URL(location.href); u.searchParams.set('v', v); location.replace(u.toString()); }
+async function checkUpdate(){
+  try{
+    const r = await fetch(location.pathname + '?_=' + Date.now(), {cache:'no-store'});
+    const m = (await r.text()).match(/const VERSION = '([^']+)'/);
+    if(!m || m[1] === VERSION) return;
+    if(formDirty()) return;
+    if(sessionStorage.getItem('crew-upd') === m[1]) return;
+    sessionStorage.setItem('crew-upd', m[1]);
+    reloadLatest(m[1]);
+  }catch(e){}
+}
 function sysDark(){ return !!(window.matchMedia && matchMedia('(prefers-color-scheme:dark)').matches); }
 function curTheme(){ const t = document.documentElement.dataset.theme; return t || (sysDark() ? 'dark' : 'light'); }
 function applyTheme(t){
@@ -170,6 +208,7 @@ function initForm(){
   $('f-machine').innerHTML = opts(MACHINES);
   $('f-ops').innerHTML = opts(OPS);
   $('l-member').innerHTML = opts(MEMBERS,'全部組員');
+  $('l-type').innerHTML = '<option value="">全部類型</option><option value="leave">出勤異常</option><option value="issue">作業問題</option>';
   resetForm();
 }
 function setDate(ymd){
@@ -222,7 +261,9 @@ function refreshViews(){
 
 function filtered(){
   const m = $('l-member').value, mo = $('l-month').value;
-  return rows.filter(r => (!m || r['組員']===m) && (!mo || r['日期'].startsWith(mo)))
+  const ty = $('l-type').value;
+  const typeOk = r => !ty || (ty==='leave' ? ATT_ABNORMAL.includes(r['出勤狀況']) : ISSUE_OPS.includes(r['操作狀況']));
+  return rows.filter(r => (!m || r['組員']===m) && (!mo || r['日期'].startsWith(mo)) && typeOk(r))
     .sort((a,b)=> b['日期'].localeCompare(a['日期']) || b._row - a._row);
 }
 function renderList(){
@@ -284,15 +325,19 @@ function showTab(t){
 async function connect(){
   $('setup').classList.add('hide'); $('main').classList.remove('hide');
   $('l-count').textContent = '讀取中…';
-  try{ const r = await call({action:'load'}); rows = r.rows; refreshViews(); setMsg('add-msg',''); }
+  try{ const r = await call({action:'load'}); rows = r.rows; syncHash(); refreshViews(); setMsg('add-msg',''); }
   catch(e){ $('main').classList.add('hide'); $('setup').classList.remove('hide'); setMsg('setup-msg','連線失敗：'+e.message+'。請確認網址與密碼。',1); }
 }
 
 $('btn-theme').onclick = ()=>{ const t = curTheme()==='dark' ? 'light' : 'dark'; LS.set('crew-theme', t); applyTheme(t); };
 if(window.matchMedia) matchMedia('(prefers-color-scheme:dark)').addEventListener && matchMedia('(prefers-color-scheme:dark)').addEventListener('change', ()=>applyTheme());
 $('btn-ver').textContent = VERSION;
-$('verlog').innerHTML = '<b style="font-size:16px">版本記錄</b>' + CHANGELOG.map(c=>`<div class="log-item"><b>${esc(c.v)}</b><span class="d">${esc(c.d)}</span><ul>${c.items.map(i=>`<li>${esc(i)}</li>`).join('')}</ul></div>`).join('');
-$('btn-ver').onclick = ()=>$('verlog').classList.toggle('hide');
+$('verlog').innerHTML = CHANGELOG.map(c=>`<div class="log-item"><b>${esc(c.v)}</b><span class="d">${esc(c.d)}</span><ul>${c.items.map(i=>`<li>${esc(i)}</li>`).join('')}</ul></div>`).join('');
+const openVer = ()=>$('vermodal').classList.remove('hide'), closeVer = ()=>$('vermodal').classList.add('hide');
+$('btn-ver').onclick = openVer; $('btn-ver-close').onclick = closeVer;
+$('vermodal').addEventListener('click', e=>{ if(e.target===$('vermodal')) closeVer(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeVer(); });
+$('btn-reload').onclick = ()=>reloadLatest(Date.now());
 applyTheme();
 $('btn-setup').onclick = ()=>{ $('api-url').value = API; $('api-pw').value = PW; $('setup').classList.toggle('hide'); };
 $('btn-save-setup').onclick = ()=>{
@@ -303,7 +348,7 @@ $('btn-save-setup').onclick = ()=>{
 document.querySelectorAll('.tabs .btn').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
 $('btn-submit').onclick = submit;
 $('btn-cancel-edit').onclick = ()=>{ resetForm(); setMsg('add-msg',''); };
-$('l-member').onchange = $('l-month').onchange = renderList;
+$('l-member').onchange = $('l-month').onchange = $('l-type').onchange = renderList;
 $('s-month').onchange = renderStat;
 $('btn-csv').onclick = exportCsv;
 $('l-table').addEventListener('click', e=>{
@@ -313,6 +358,8 @@ $('l-table').addEventListener('click', e=>{
 
 initForm();
 if(API && PW) connect(); else { $('setup').classList.remove('hide'); }
+checkUpdate();
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') checkUpdate(); });
 </script>
 </body>
 </html>
