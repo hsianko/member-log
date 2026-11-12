@@ -2,16 +2,29 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
 <title>組員出勤與操作紀錄</title>
 <style>
 :root{--bg:#fffaf0;--card:#fff;--ink:#3b3634;--sub:#7a716b;--line:#e5d9c6;--input:#faf1df;--accent:#cde5bf;--accent2:#f6d27a;--bad:#e8867a;--warn:#f1c25b;--ok:#86b97a;--shadow:#3b3634}
-@media (prefers-color-scheme:dark){:root{--bg:#1f1d1b;--card:#2a2725;--ink:#f1e9de;--sub:#b3a99d;--line:#4a4440;--input:#363230;--accent:#8fa584;--accent2:#c9a24f;--bad:#d77a6e;--warn:#cfa44a;--ok:#7ea373;--shadow:#000}}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1f1d1b;--card:#2a2725;--ink:#f1e9de;--sub:#b3a99d;--line:#4a4440;--input:#363230;--accent:#8fa584;--accent2:#c9a24f;--bad:#d77a6e;--warn:#cfa44a;--ok:#7ea373;--shadow:#000}}
+:root[data-theme=dark]{--bg:#1f1d1b;--card:#2a2725;--ink:#f1e9de;--sub:#b3a99d;--line:#4a4440;--input:#363230;--accent:#8fa584;--accent2:#c9a24f;--bad:#d77a6e;--warn:#cfa44a;--ok:#7ea373;--shadow:#000}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:'PingFang TC','Microsoft JhengHei',sans-serif;font-size:15px}
-.wrap{max-width:900px;margin:0 auto;padding:14px 16px 60px}
+html{-webkit-text-size-adjust:100%;overflow-anchor:none}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'PingFang TC','Microsoft JhengHei',sans-serif;font-size:15px;overscroll-behavior-y:none}
+.wrap{max-width:900px;margin:0 auto;padding:calc(14px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(60px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left))}
 header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
-h1{font-size:21px;margin:0}
+h1{font-size:21px;margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ver{font-size:12px;font-weight:700;border:2px solid var(--ink);border-radius:999px;padding:1px 9px;background:var(--card);cursor:pointer;color:var(--ink);box-shadow:none}
+.hbtns{display:flex;align-items:center;gap:8px}
+.theme{display:flex;align-items:center;gap:2px;border:2px solid var(--ink);border-radius:999px;background:var(--card);padding:2px;cursor:pointer}
+.theme span{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;line-height:1}
+.theme span.on{background:var(--accent2)}
+.log-item{padding:10px 0;border-bottom:1px dashed var(--line)}
+.log-item:last-child{border-bottom:0}
+.log-item b{font-size:15px}
+.log-item .d{color:var(--sub);font-size:13px;margin-left:6px}
+.log-item ul{margin:6px 0 0;padding-left:20px;line-height:1.7}
 button,select,input{font:inherit;color:var(--ink)}
 .btn{border:2px solid var(--ink);background:var(--card);border-radius:12px;padding:7px 14px;cursor:pointer;box-shadow:2px 2px 0 var(--shadow);font-weight:600}
 .btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--shadow)}
@@ -42,15 +55,20 @@ td.num,th.num{text-align:center}
 .hide{display:none!important}
 .setup p{color:var(--sub);margin:0 0 12px;line-height:1.6}
 .hint{color:var(--sub);font-size:13px;margin:8px 0 0}
-@media (max-width:560px){.c-shift{display:none}table{min-width:420px}.grid{grid-template-columns:1fr}h1{font-size:19px}}
+@media (max-width:560px){select,input[type=text],input[type=password]{font-size:16px}.c-shift{display:none}table{min-width:420px}.grid{grid-template-columns:1fr}h1{font-size:19px}}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>組員出勤與操作紀錄</h1>
-    <button class="btn small" id="btn-setup">設定</button>
+    <h1>組員出勤與操作紀錄 <button class="ver" id="btn-ver" type="button" title="版本記錄"></button></h1>
+    <div class="hbtns">
+      <button class="theme" id="btn-theme" type="button" aria-label="切換深淺色"><span id="th-dark">🌙</span><span id="th-light">☀️</span></button>
+      <button class="btn small" id="btn-setup">設定</button>
+    </div>
   </header>
+
+  <div id="verlog" class="card hide" style="margin-bottom:14px"></div>
 
   <div id="setup" class="card setup hide">
     <p>第一次使用請貼上 Apps Script 的網址與你設定的密碼，這些只會存在這台裝置的瀏覽器裡。</p>
@@ -113,9 +131,22 @@ const ATT_TAG = {'正常出勤':'ok','加班':'info','遲到':'warn','早退':'w
 const OPS_TAG = {'良好':'ok','正常':'ok','需要提醒':'warn','操作失誤':'bad','需要協助':'warn'};
 // ===================================================
 
+const VERSION = 'v1.1';
+const CHANGELOG = [
+  {v:'v1.1', d:'2026-11-11', items:['新增深淺色切換按鈕（記住你的選擇，預設跟隨裝置）','修正手機點選欄位時頁面自動放大、捲動造成頂端畫面位移','加入版本記錄']},
+  {v:'v1.0', d:'2026-11-11', items:['初版：新增、修改、刪除紀錄','紀錄清單（可依組員、月份篩選，匯出 CSV）','月統計']}
+];
 const $ = id => document.getElementById(id);
 const LS = {get:k=>{try{return localStorage.getItem(k)||''}catch(e){return ''}}, set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
 let API = LS.get('crew-api'), PW = LS.get('crew-pw');
+function sysDark(){ return !!(window.matchMedia && matchMedia('(prefers-color-scheme:dark)').matches); }
+function curTheme(){ const t = document.documentElement.dataset.theme; return t || (sysDark() ? 'dark' : 'light'); }
+function applyTheme(t){
+  if(t) document.documentElement.dataset.theme = t;
+  const dk = curTheme() === 'dark';
+  $('th-dark').classList.toggle('on', dk); $('th-light').classList.toggle('on', !dk);
+}
+(function(){ const t = LS.get('crew-theme'); if(t==='dark'||t==='light') document.documentElement.dataset.theme = t; })();
 let rows = [], editingRow = null, busy = false, delArm = null;
 const pad = n => String(n).padStart(2,'0');
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -257,6 +288,12 @@ async function connect(){
   catch(e){ $('main').classList.add('hide'); $('setup').classList.remove('hide'); setMsg('setup-msg','連線失敗：'+e.message+'。請確認網址與密碼。',1); }
 }
 
+$('btn-theme').onclick = ()=>{ const t = curTheme()==='dark' ? 'light' : 'dark'; LS.set('crew-theme', t); applyTheme(t); };
+if(window.matchMedia) matchMedia('(prefers-color-scheme:dark)').addEventListener && matchMedia('(prefers-color-scheme:dark)').addEventListener('change', ()=>applyTheme());
+$('btn-ver').textContent = VERSION;
+$('verlog').innerHTML = '<b style="font-size:16px">版本記錄</b>' + CHANGELOG.map(c=>`<div class="log-item"><b>${esc(c.v)}</b><span class="d">${esc(c.d)}</span><ul>${c.items.map(i=>`<li>${esc(i)}</li>`).join('')}</ul></div>`).join('');
+$('btn-ver').onclick = ()=>$('verlog').classList.toggle('hide');
+applyTheme();
 $('btn-setup').onclick = ()=>{ $('api-url').value = API; $('api-pw').value = PW; $('setup').classList.toggle('hide'); };
 $('btn-save-setup').onclick = ()=>{
   const u = $('api-url').value.trim(), p = $('api-pw').value;
