@@ -7,6 +7,8 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <title>組員出勤與操作紀錄</title>
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="apple-touch-icon.png">
 <style>
 :root{--bg:#fffaf0;--card:#fff;--ink:#3b3634;--sub:#7a716b;--line:#e5d9c6;--input:#faf1df;--accent:#cde5bf;--accent2:#f6d27a;--bad:#e8867a;--warn:#f1c25b;--ok:#86b97a;--shadow:#3b3634}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1f1d1b;--card:#2a2725;--ink:#f1e9de;--sub:#b3a99d;--line:#4a4440;--input:#363230;--accent:#8fa584;--accent2:#c9a24f;--bad:#d77a6e;--warn:#cfa44a;--ok:#7ea373;--shadow:#000}}
@@ -145,8 +147,9 @@ const ISSUE_OPS = ['需要提醒','操作失誤','需要協助'];
 const OPS_TAG = {'良好':'ok','正常':'ok','需要提醒':'warn','操作失誤':'bad','需要協助':'warn'};
 // ===================================================
 
-const VERSION = 'v1.4';
+const VERSION = 'v1.5';
 const CHANGELOG = [
+  {v:'v1.5', d:'2026-11-12', items:['新增 App 圖示（加到主畫面時顯示）']},
   {v:'v1.4', d:'2026-11-12', items:['標題列固定在頁面頂端，捲動時不會跟著移動']},
   {v:'v1.3', d:'2026-11-12', items:['紀錄清單「請假」篩選改為「出勤異常」，包含請假、遲到、早退、曠職']},
   {v:'v1.2', d:'2026-11-12', items:['紀錄清單新增「類型」篩選：請假／作業問題','連線設定自動記在網址列，加入書籤或主畫面後免重複輸入','開啟時自動檢查新版，不用再重新加入主畫面','版本記錄改為浮動視窗，內含「重新載入最新版」按鈕']},
