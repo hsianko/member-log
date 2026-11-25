@@ -57,7 +57,7 @@ th{background:var(--input);font-size:13px;color:var(--sub)}
 td.note{white-space:normal;min-width:100px}
 td.num,th.num{text-align:center}
 .tag{display:inline-block;padding:1px 9px;border-radius:999px;border:1.5px solid var(--ink);font-size:12.5px;font-weight:600;color:#3b3634}
-.t-ok{background:#cde5bf}.t-warn{background:#f6d27a}.t-bad{background:#f2a89d}.t-info{background:#bcd6ee}
+.t-ok{background:#cde5bf}.t-warn{background:#f6d27a}.t-bad{background:#f2a89d}.t-info{background:#bcd6ee}.t-neutral{background:#efe6d6;font-weight:500}
 .empty{padding:20px;text-align:center;color:var(--sub)}
 .hide{display:none!important}
 .setup p{color:var(--sub);margin:0 0 12px;line-height:1.6}
@@ -141,14 +141,15 @@ const SHIFTS = ['08:30-17:30','09:00-18:00'];
 const ATTENDANCE = ['正常出勤','遲到','早退','請假','曠職','加班'];
 const MACHINES = ['無','大寶','二寶','三寶','四寶'];
 const OPS = ['良好','正常','需要提醒','操作失誤','需要協助'];
-const ATT_TAG = {'正常出勤':'ok','加班':'info','遲到':'warn','早退':'warn','請假':'info','曠職':'bad'};
+const ATT_TAG = {'正常出勤':'neutral','加班':'info','遲到':'warn','早退':'warn','請假':'info','曠職':'bad'};
 const ATT_ABNORMAL = ['請假','遲到','早退','曠職'];
 const ISSUE_OPS = ['需要提醒','操作失誤','需要協助'];
-const OPS_TAG = {'良好':'ok','正常':'ok','需要提醒':'warn','操作失誤':'bad','需要協助':'warn'};
+const OPS_TAG = {'良好':'ok','正常':'neutral','需要提醒':'warn','操作失誤':'bad','需要協助':'warn'};
 // ===================================================
 
-const VERSION = 'v1.6';
+const VERSION = 'v1.7';
 const CHANGELOG = [
+  {v:'v1.7', d:'2026-11-25', items:['「正常出勤」「正常」改為中性色，「良好」維持綠色，異常項目更容易看出']},
   {v:'v1.6', d:'2026-11-17', items:['App 圖示改為「組」字貼紙款']},
   {v:'v1.5', d:'2026-11-12', items:['新增 App 圖示（加到主畫面時顯示）']},
   {v:'v1.4', d:'2026-11-12', items:['標題列固定在頁面頂端，捲動時不會跟著移動']},
