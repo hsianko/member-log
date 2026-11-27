@@ -46,6 +46,8 @@ button,select,input{font:inherit;color:var(--ink)}
 .field.full{grid-column:1/-1}
 select,input[type=text],input[type=password]{width:100%;background:var(--input);border:1.5px solid var(--line);border-radius:12px;padding:9px 12px}
 .ymd{display:flex;gap:6px}
+.req{color:var(--bad)}
+select:disabled{opacity:.45}
 .msg{margin-top:10px;font-size:14px;color:var(--sub);min-height:20px}
 .msg.err{color:var(--bad);font-weight:600}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
@@ -105,9 +107,9 @@ td.num,th.num{text-align:center}
         <div class="field"><label>組員</label><select id="f-member"></select></div>
         <div class="field"><label>班別</label><select id="f-shift"></select></div>
         <div class="field"><label>出勤狀況</label><select id="f-att"></select></div>
-        <div class="field"><label>操作機台</label><select id="f-machine"></select></div>
-        <div class="field"><label>操作狀況</label><select id="f-ops"></select></div>
-        <div class="field"><label>備註（可不填）</label><input type="text" id="f-note" placeholder="例如：遲到 10 分鐘、處理取標異常很熟練"></div>
+        <div class="field"><label id="lb-machine">操作機台</label><select id="f-machine"></select></div>
+        <div class="field"><label id="lb-ops">操作狀況</label><select id="f-ops"></select></div>
+        <div class="field"><label id="lb-note">備註</label><input type="text" id="f-note" placeholder="例如：遲到 10 分鐘、處理取標異常很熟練"></div>
       </div>
       <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn primary" id="btn-submit">新增紀錄</button>
@@ -147,8 +149,9 @@ const ISSUE_OPS = ['需要提醒','操作失誤','需要協助'];
 const OPS_TAG = {'良好':'ok','正常':'neutral','需要提醒':'warn','操作失誤':'bad','需要協助':'warn'};
 // ===================================================
 
-const VERSION = 'v1.7';
+const VERSION = 'v1.8';
 const CHANGELOG = [
+  {v:'v1.8', d:'2026-11-27', items:['新增填表規則：依「出勤狀況」檢查必填欄位','正常出勤／加班／遲到／早退：日期、組員、班別、機台、操作狀況、備註皆必填','請假／曠職：日期、組員、班別、備註必填，機台與操作狀況不用填（自動停用）','機台、操作狀況預設改為「請選擇」，避免忘記填']},
   {v:'v1.7', d:'2026-11-25', items:['「正常出勤」「正常」改為中性色，「良好」維持綠色，異常項目更容易看出']},
   {v:'v1.6', d:'2026-11-17', items:['App 圖示改為「組」字貼紙款']},
   {v:'v1.5', d:'2026-11-12', items:['新增 App 圖示（加到主畫面時顯示）']},
@@ -170,6 +173,31 @@ function cfgToHash(){ return '#cfg=' + encodeURIComponent(btoa(unescape(encodeUR
 function syncHash(){ try{ if(API && PW) history.replaceState(null,'',location.pathname+location.search+cfgToHash()); }catch(e){} }
 (function(){ const c = cfgFromHash(); if(c && c.u && c.p){ API = c.u; PW = c.p; LS.set('crew-api',API); LS.set('crew-pw',PW); } })();
 try{ navigator.storage && navigator.storage.persist && navigator.storage.persist(); }catch(e){}
+// ===== 填表規則（以出勤狀況為中心）=====
+const NO_WORK_ATT = ['請假','曠職'];   // 這兩種不用填機台、操作狀況
+const NOTE_HINT = {'正常出勤':'例如：處理取標異常很熟練','加班':'例如：加班到 20:00、協助出貨','遲到':'例如：遲到 10 分鐘','早退':'例如：身體不適，下午 3 點下班','請假':'例如：預計請假／臨時請假（原因）','曠職':'例如：未到班，已聯絡不上'};
+function needWork(){ return !NO_WORK_ATT.includes($('f-att').value); }
+function applyRules(){
+  const w = needWork();
+  $('f-machine').disabled = !w; $('f-ops').disabled = !w;
+  if(!w){ $('f-machine').value = ''; $('f-ops').value = ''; }
+  const star = '<span class="req"> ＊必填</span>', skip = '<span style="color:var(--sub)">（不用填）</span>';
+  $('lb-machine').innerHTML = '操作機台' + (w ? star : skip);
+  $('lb-ops').innerHTML = '操作狀況' + (w ? star : skip);
+  $('lb-note').innerHTML = '備註' + star;
+  $('f-note').placeholder = NOTE_HINT[$('f-att').value] || '';
+}
+function missingFields(){
+  const m = [];
+  if(!$('f-member').value) m.push(['組員','f-member']);
+  if(!$('f-shift').value) m.push(['班別','f-shift']);
+  if(needWork()){
+    if(!$('f-machine').value) m.push(['操作機台','f-machine']);
+    if(!$('f-ops').value) m.push(['操作狀況','f-ops']);
+  }
+  if(!$('f-note').value.trim()) m.push(['備註','f-note']);
+  return m;
+}
 function formDirty(){ return !!(editingRow || ($('f-member') && $('f-member').value) || ($('f-note') && $('f-note').value)); }
 function reloadLatest(v){ const u = new URL(location.href); u.searchParams.set('v', v); location.replace(u.toString()); }
 async function checkUpdate(){
@@ -211,8 +239,9 @@ function initForm(){
   $('f-member').innerHTML = opts(MEMBERS,'請選擇');
   $('f-shift').innerHTML = opts(SHIFTS);
   $('f-att').innerHTML = opts(ATTENDANCE);
-  $('f-machine').innerHTML = opts(MACHINES);
-  $('f-ops').innerHTML = opts(OPS);
+  $('f-machine').innerHTML = opts(MACHINES,'請選擇');
+  $('f-ops').innerHTML = opts(OPS,'請選擇');
+  $('f-att').onchange = applyRules;
   $('l-member').innerHTML = opts(MEMBERS,'全部組員');
   $('l-type').innerHTML = '<option value="">全部類型</option><option value="leave">出勤異常</option><option value="issue">作業問題</option>';
   resetForm();
@@ -225,7 +254,7 @@ function setDate(ymd){
 function resetForm(){
   const n = new Date();
   setDate(`${n.getFullYear()}-${pad(n.getMonth()+1)}-${pad(n.getDate())}`);
-  $('f-member').value = ''; $('f-att').value = ATTENDANCE[0]; $('f-machine').value = MACHINES[0]; $('f-ops').value = OPS[1]; $('f-note').value = '';
+  $('f-member').value = ''; $('f-att').value = ATTENDANCE[0]; $('f-machine').value = ''; $('f-ops').value = ''; $('f-note').value = ''; applyRules();
   editingRow = null;
   $('btn-submit').textContent = '新增紀錄'; $('btn-cancel-edit').classList.add('hide');
 }
@@ -237,8 +266,10 @@ async function submit(){
   if(busy) return;
   const date = formDate();
   if(!validDate(date)){ setMsg('add-msg','日期不正確，請重新選擇。',1); return; }
-  if(!$('f-member').value){ setMsg('add-msg','請先選擇組員。',1); return; }
-  const data = {'日期':date,'組員':$('f-member').value,'班別':$('f-shift').value,'出勤狀況':$('f-att').value,'機台':$('f-machine').value,'操作狀況':$('f-ops').value,'備註':$('f-note').value.trim()};
+  const miss = missingFields();
+  if(miss.length){ setMsg('add-msg','請填寫：' + miss.map(x=>x[0]).join('、') + '（出勤狀況為「' + $('f-att').value + '」時必填）。',1); $(miss[0][1]).focus(); return; }
+  const w = needWork();
+  const data = {'日期':date,'組員':$('f-member').value,'班別':$('f-shift').value,'出勤狀況':$('f-att').value,'機台':w?$('f-machine').value:'','操作狀況':w?$('f-ops').value:'','備註':$('f-note').value.trim()};
   busy = true; $('btn-submit').disabled = true; const old = $('btn-submit').textContent; $('btn-submit').textContent = '儲存中…'; setMsg('add-msg','');
   try{
     const r = editingRow ? await call({action:'update',row:editingRow,data}) : await call({action:'add',data});
@@ -299,7 +330,7 @@ function renderStat(){
 function startEdit(row){
   const r = rows.find(x=>x._row===row); if(!r) return;
   editingRow = row; setDate(r['日期']);
-  $('f-member').value = r['組員']; $('f-shift').value = r['班別']; $('f-att').value = r['出勤狀況']; $('f-machine').value = r['機台']; $('f-ops').value = r['操作狀況']; $('f-note').value = r['備註'];
+  $('f-member').value = r['組員']; $('f-shift').value = r['班別']; $('f-att').value = r['出勤狀況']; $('f-machine').value = r['機台']; $('f-ops').value = r['操作狀況']; $('f-note').value = r['備註']; applyRules();
   $('btn-submit').textContent = '儲存修改'; $('btn-cancel-edit').classList.remove('hide');
   setMsg('add-msg','正在修改一筆紀錄，改完請按「儲存修改」。');
   showTab('add'); window.scrollTo({top:0,behavior:'smooth'});
